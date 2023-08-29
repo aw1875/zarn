@@ -48,6 +48,7 @@ pub const Git = struct {
         return .{ .author = author, .repo = repo, .branch = "master", .repo_url = formatted_url, .tarball_url = tarball_url };
     }
 
+    // TODO allow just author/repo (ex: aw1875/zarn) rather than entire url
     pub fn getGitDetails(allocator: Allocator, url: string) !Git {
         var client: std.http.Client = .{ .allocator = allocator };
         defer client.deinit();
@@ -71,12 +72,6 @@ pub const Git = struct {
         git.repo_details = repo_details;
 
         return git;
-    }
-
-    pub fn stringToGit(allocator: Allocator, url: string) !Git {
-        const source = try Git.getGitDetails(allocator, url);
-
-        return try json.parseFromSliceLeaky(Git, allocator, source, .{ .ignore_unknown_fields = true });
     }
 };
 

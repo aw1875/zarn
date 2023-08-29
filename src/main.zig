@@ -84,6 +84,12 @@ pub fn main() !void {
     const args = process_args[1..];
     defer allocator.free(process_args);
 
+    // No args
+    if (args.len == 0) {
+        try printHelp(allocator);
+        return;
+    }
+
     if (std.mem.eql(u8, args[0], "--help") or std.mem.eql(u8, args[0], "-h")) {
         try printHelp(allocator);
     } else {
