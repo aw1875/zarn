@@ -1,6 +1,4 @@
 const std = @import("std");
-pub const build_options = @import("build_options");
-const builtin = @import("builtin");
 
 const Allocator = std.mem.Allocator;
 
