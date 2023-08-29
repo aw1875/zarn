@@ -1,2 +1,12 @@
+# Zig build and cache files
 zig-*
+
+# Zarn build and cache files (temporary)
 *.json
+*.lock
+
+# Zarn libs
+libs
+
+# Example files
+*.example
