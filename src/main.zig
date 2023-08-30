@@ -54,6 +54,8 @@ pub fn initProject(allocator: Allocator) !void {
         defer init_file.close();
 
         _ = try init_file.write(init_json);
+
+        try common.sedToBuild(allocator);
     }
 }
 

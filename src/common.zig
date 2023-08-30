@@ -7,6 +7,11 @@ const DirOpenError = std.fs.Dir.OpenError;
 const Git = @import("git.zig").Git;
 const string = []const u8;
 
+const Module = struct {
+    name: string,
+    path: string,
+};
+
 const Dependency = struct {
     name: string,
     url: string,
@@ -71,6 +76,27 @@ pub const Config = struct {
         defer file.close();
         try file.seekTo(0);
         _ = try file.write(try new_config.toJSON(allocator));
+
+        // Handle modules
+        var modules = std.ArrayList(Module).init(allocator);
+        defer modules.deinit();
+
+        for (new_config.dependencies) |dep| {
+            const path = try std.fmt.allocPrint(allocator, "libs/{s}/src/main.zig", .{dep.name});
+            try modules.append(Module{ .name = dep.name, .path = path });
+        }
+
+        const deps_file = try std.fs.cwd().createFile("deps.zig", .{ .truncate = true });
+        defer deps_file.close();
+        try deps_file.seekTo(0);
+
+        _ = try deps_file.write("const Module = struct { name: []const u8, path: []const u8 };\npub const deps: []const Module = &[_]Module{");
+
+        for (modules.items) |module| {
+            _ = try deps_file.write(try std.fmt.allocPrint(allocator, "Module{{ .name = \"{s}\", .path = \"{s}\" }},", .{ module.name, module.path }));
+        }
+
+        _ = try deps_file.write("};");
     }
 
     pub fn removeDependency(self: Config, name: string, allocator: Allocator) !void {
@@ -98,6 +124,27 @@ pub const Config = struct {
         defer file.close();
         try file.seekTo(0);
         _ = try file.write(try new_config.toJSON(allocator));
+
+        // Handle modules
+        var modules = std.ArrayList(Module).init(allocator);
+        defer modules.deinit();
+
+        for (new_config.dependencies) |dep| {
+            const path = try std.fmt.allocPrint(allocator, "libs/{s}/src/main.zig", .{dep.name});
+            try modules.append(Module{ .name = dep.name, .path = path });
+        }
+
+        const deps_file = try std.fs.cwd().createFile("deps.zig", .{ .truncate = true });
+        defer deps_file.close();
+        try deps_file.seekTo(0);
+
+        _ = try deps_file.write("const Module = struct { name: []const u8, path: []const u8 };\npub const deps: []const Module = &[_]Module{");
+
+        for (modules.items) |module| {
+            _ = try deps_file.write(try std.fmt.allocPrint(allocator, "Module{{ .name = \"{s}\", .path = \"{s}\" }},", .{ module.name, module.path }));
+        }
+
+        _ = try deps_file.write("};");
     }
 };
 
@@ -201,4 +248,40 @@ fn createTmpDir() !std.fs.Dir {
 
 fn deleteTmpDir() !void {
     try std.fs.cwd().deleteDir(".tmp");
+}
+
+pub fn sedToBuild(allocator: Allocator) !void {
+    const deps_file = try std.fs.cwd().createFile("deps.zig", .{ .truncate = true });
+    defer deps_file.close();
+    try deps_file.seekTo(0);
+
+    _ = try deps_file.write("const Module = struct { name: []const u8, path: []const u8 };\npub const deps: []const Module = &[_]Module{};");
+
+    _ = std.ChildProcess.exec(.{
+        .allocator = allocator,
+        .argv = &.{
+            "sed",
+            "-i",
+            "1a const deps = @import(\"deps.zig\").deps;",
+            "build.zig",
+        },
+        .cwd = ".",
+    }) catch |err| {
+        std.log.err("Failed to execute command {any}", .{err});
+        return;
+    };
+
+    _ = std.ChildProcess.exec(.{
+        .allocator = allocator,
+        .argv = &.{
+            "sed",
+            "-i",
+            "/b.addExecutable/,/});/{/});/a \\\\    inline for (deps) |dep| exe.addModule(dep.name, b.addModule(dep.name, .{ .source_file = .{ .path = dep.path } }));\n}",
+            "build.zig",
+        },
+        .cwd = ".",
+    }) catch |err| {
+        std.log.err("Failed to execute command {any}", .{err});
+        return;
+    };
 }
