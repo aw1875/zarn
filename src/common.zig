@@ -51,6 +51,29 @@ pub const Config = struct {
         return buffer.items;
     }
 
+    fn addModule(dependencies: []Dependency, allocator: Allocator) !void {
+        // Handle modules
+        var modules = std.ArrayList(Module).init(allocator);
+        defer modules.deinit();
+
+        for (dependencies) |dep| {
+            const path = try std.fmt.allocPrint(allocator, "modules/{s}/src/main.zig", .{dep.name});
+            try modules.append(Module{ .name = dep.name, .path = path });
+        }
+
+        const modules_file = try std.fs.cwd().createFile("modules.zig", .{ .truncate = true });
+        defer modules_file.close();
+        try modules_file.seekTo(0);
+
+        _ = try modules_file.write("const Module = struct { name: []const u8, path: []const u8 };\npub const modules: []const Module = &[_]Module{");
+
+        for (modules.items) |module| {
+            _ = try modules_file.write(try std.fmt.allocPrint(allocator, "Module{{ .name = \"{s}\", .path = \"{s}\" }},", .{ module.name, module.path }));
+        }
+
+        _ = try modules_file.write("};");
+    }
+
     pub fn addDependency(self: Config, name: string, url: string, allocator: Allocator) !void {
         var current_deps = self.dependencies;
         var deps = std.ArrayList(Dependency).init(allocator);
@@ -78,25 +101,7 @@ pub const Config = struct {
         _ = try file.write(try new_config.toJSON(allocator));
 
         // Handle modules
-        var modules = std.ArrayList(Module).init(allocator);
-        defer modules.deinit();
-
-        for (new_config.dependencies) |dep| {
-            const path = try std.fmt.allocPrint(allocator, "libs/{s}/src/main.zig", .{dep.name});
-            try modules.append(Module{ .name = dep.name, .path = path });
-        }
-
-        const deps_file = try std.fs.cwd().createFile("deps.zig", .{ .truncate = true });
-        defer deps_file.close();
-        try deps_file.seekTo(0);
-
-        _ = try deps_file.write("const Module = struct { name: []const u8, path: []const u8 };\npub const deps: []const Module = &[_]Module{");
-
-        for (modules.items) |module| {
-            _ = try deps_file.write(try std.fmt.allocPrint(allocator, "Module{{ .name = \"{s}\", .path = \"{s}\" }},", .{ module.name, module.path }));
-        }
-
-        _ = try deps_file.write("};");
+        try addModule(new_config.dependencies, allocator);
     }
 
     pub fn removeDependency(self: Config, name: string, allocator: Allocator) !void {
@@ -126,25 +131,7 @@ pub const Config = struct {
         _ = try file.write(try new_config.toJSON(allocator));
 
         // Handle modules
-        var modules = std.ArrayList(Module).init(allocator);
-        defer modules.deinit();
-
-        for (new_config.dependencies) |dep| {
-            const path = try std.fmt.allocPrint(allocator, "libs/{s}/src/main.zig", .{dep.name});
-            try modules.append(Module{ .name = dep.name, .path = path });
-        }
-
-        const deps_file = try std.fs.cwd().createFile("deps.zig", .{ .truncate = true });
-        defer deps_file.close();
-        try deps_file.seekTo(0);
-
-        _ = try deps_file.write("const Module = struct { name: []const u8, path: []const u8 };\npub const deps: []const Module = &[_]Module{");
-
-        for (modules.items) |module| {
-            _ = try deps_file.write(try std.fmt.allocPrint(allocator, "Module{{ .name = \"{s}\", .path = \"{s}\" }},", .{ module.name, module.path }));
-        }
-
-        _ = try deps_file.write("};");
+        try addModule(new_config.dependencies, allocator);
     }
 };
 
@@ -211,31 +198,31 @@ pub fn getTarballStream(allocator: Allocator, git: Git) !void {
     defer gzip.deinit();
     try std.tar.pipeToFileSystem(tmp_dir, gzip.reader(), .{ .mode_mode = .ignore });
 
-    // Move to libs dir
+    // Move to modules dir
     const old_path = try std.fmt.allocPrint(allocator, "{s}-{s}-{s}", .{ git.repo_details.?.author, git.repo_details.?.repo, git.sha[0..7] });
-    const new_path = try std.fmt.allocPrint(allocator, "../libs/{s}", .{git.repo_details.?.repo});
+    const new_path = try std.fmt.allocPrint(allocator, "../modules/{s}", .{git.repo_details.?.repo});
     std.log.info("Moving {s} to {s}", .{ old_path, new_path });
-    try moveToLibs(tmp_dir, old_path, new_path);
+    try moveToModules(tmp_dir, old_path, new_path);
 
     // Delete .tmp
     try deleteTmpDir();
 }
 
 pub fn removeLib(name: string) !void {
-    var folder = try std.fs.cwd().openDir("libs", .{});
+    var folder = try std.fs.cwd().openDir("modules", .{});
     try folder.deleteTree(name);
 }
 
-fn moveToLibs(old_dir: std.fs.Dir, old_path: string, new_path: string) !void {
-    if (try folderExists("libs") == false) {
-        try std.fs.cwd().makeDir("libs");
+fn moveToModules(old_dir: std.fs.Dir, old_path: string, new_path: string) !void {
+    if (try folderExists("modules") == false) {
+        try std.fs.cwd().makeDir("modules");
     }
 
     try old_dir.rename(old_path, new_path);
 }
 
-fn openLibsDir() !std.fs.Dir {
-    return try std.fs.cwd().openDir("libs", .{});
+fn openModulesDir() !std.fs.Dir {
+    return try std.fs.cwd().openDir("modules", .{});
 }
 
 fn createTmpDir() !std.fs.Dir {
@@ -251,18 +238,18 @@ fn deleteTmpDir() !void {
 }
 
 pub fn sedToBuild(allocator: Allocator) !void {
-    const deps_file = try std.fs.cwd().createFile("deps.zig", .{ .truncate = true });
+    const deps_file = try std.fs.cwd().createFile("modules.zig", .{ .truncate = true });
     defer deps_file.close();
     try deps_file.seekTo(0);
 
-    _ = try deps_file.write("const Module = struct { name: []const u8, path: []const u8 };\npub const deps: []const Module = &[_]Module{};");
+    _ = try deps_file.write("const Module = struct { name: []const u8, path: []const u8 };\npub const modules: []const Module = &[_]Module{};");
 
     _ = std.ChildProcess.exec(.{
         .allocator = allocator,
         .argv = &.{
             "sed",
             "-i",
-            "1a const deps = @import(\"deps.zig\").deps;",
+            "1a const modules = @import(\"modules.zig\").modules;",
             "build.zig",
         },
         .cwd = ".",
@@ -276,7 +263,7 @@ pub fn sedToBuild(allocator: Allocator) !void {
         .argv = &.{
             "sed",
             "-i",
-            "/b.addExecutable/,/});/{/});/a \\\\    inline for (deps) |dep| exe.addModule(dep.name, b.addModule(dep.name, .{ .source_file = .{ .path = dep.path } }));\n}",
+            "/b.addExecutable/,/});/{/});/a \\\\    inline for (modules) |mod| exe.addModule(mod.name, b.addModule(mod.name, .{ .source_file = .{ .path = mod.path } }));\n}",
             "build.zig",
         },
         .cwd = ".",
