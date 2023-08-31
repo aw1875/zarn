@@ -4,6 +4,7 @@ const Allocator = std.mem.Allocator;
 
 const common = @import("common.zig");
 const Git = @import("git.zig").Git;
+const ArgsHandler = @import("cli.zig").ArgsHandler;
 
 const string = []const u8;
 
@@ -81,32 +82,33 @@ pub fn removePackage(allocator: Allocator, name: string) !void {
 }
 
 pub fn main() !void {
-    var allocator = std.heap.page_allocator;
-    const process_args = try std.process.argsAlloc(allocator);
-    const args = process_args[1..];
-    defer allocator.free(process_args);
+    try ArgsHandler();
+    // var allocator = std.heap.page_allocator;
+    // const process_args = try std.process.argsAlloc(allocator);
+    // const args = process_args[1..];
+    // defer allocator.free(process_args);
 
-    // No args
-    if (args.len == 0) {
-        try printHelp(allocator);
-        return;
-    }
+    // // No args
+    // if (args.len == 0) {
+    //     try printHelp(allocator);
+    //     return;
+    // }
 
-    if (std.mem.eql(u8, args[0], "--help") or std.mem.eql(u8, args[0], "-h")) {
-        try printHelp(allocator);
-    } else {
-        if (std.mem.eql(u8, args[0], "init")) {
-            try initProject(allocator);
-        } else if (std.mem.eql(u8, args[0], "install")) {
-            switch (args.len) {
-                2 => try installPackage(allocator, args[1]),
-                else => try printHelp(allocator),
-            }
-        } else if (std.mem.eql(u8, args[0], "remove")) {
-            switch (args.len) {
-                2 => try removePackage(allocator, args[1]),
-                else => try printHelp(allocator),
-            }
-        }
-    }
+    // if (std.mem.eql(u8, args[0], "--help") or std.mem.eql(u8, args[0], "-h")) {
+    //     try printHelp(allocator);
+    // } else {
+    //     if (std.mem.eql(u8, args[0], "init")) {
+    //         try initProject(allocator);
+    //     } else if (std.mem.eql(u8, args[0], "install")) {
+    //         switch (args.len) {
+    //             2 => try installPackage(allocator, args[1]),
+    //             else => try printHelp(allocator),
+    //         }
+    //     } else if (std.mem.eql(u8, args[0], "remove")) {
+    //         switch (args.len) {
+    //             2 => try removePackage(allocator, args[1]),
+    //             else => try printHelp(allocator),
+    //         }
+    //     }
+    // }
 }
