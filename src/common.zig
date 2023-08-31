@@ -201,7 +201,7 @@ pub fn getTarballStream(allocator: Allocator, git: Git) !void {
     // Move to modules dir
     const old_path = try std.fmt.allocPrint(allocator, "{s}-{s}-{s}", .{ git.repo_details.?.author, git.repo_details.?.repo, git.sha[0..7] });
     const new_path = try std.fmt.allocPrint(allocator, "../modules/{s}", .{git.repo_details.?.repo});
-    std.log.info("Moving {s} to {s}", .{ old_path, new_path });
+    std.log.debug("Moving {s} to {s}", .{ old_path, new_path });
     try moveToModules(tmp_dir, old_path, new_path);
 
     // Delete .tmp

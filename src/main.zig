@@ -59,22 +59,22 @@ pub fn initProject(allocator: Allocator) !void {
     }
 }
 
-pub fn installPackage(allocator: Allocator, url: string) !void {
-    std.log.info("Installing package from {s}", .{url});
-    var git = try Git.getGitDetails(allocator, url);
+pub fn installPackage(allocator: Allocator, package: string) !void {
+    std.log.debug("Installing package {s}", .{package});
+    var git = try Git.getGitDetails(allocator, package);
     if (git.repo_details == null) return error.GitRepoMissingDetails;
 
-    std.log.info("Getting tarball for branch {s}", .{git.repo_details.?.branch});
+    std.log.debug("Getting tarball for branch {s}", .{git.repo_details.?.branch});
     try common.getTarballStream(allocator, git);
 
     var config = try common.Config.getConfig(allocator);
     try config.addDependency(git.repo_details.?.repo, git.repo_details.?.tarball_url, allocator);
 
-    std.log.info("{s} installed", .{git.repo_details.?.repo});
+    std.log.debug("{s} installed", .{git.repo_details.?.repo});
 }
 
 pub fn removePackage(allocator: Allocator, name: string) !void {
-    std.log.info("Removing package {s}", .{name});
+    std.log.debug("Removing package {s}", .{name});
     var config = try common.Config.getConfig(allocator);
     try config.removeDependency(name, allocator);
     try common.removeLib(name);

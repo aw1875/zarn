@@ -28,34 +28,25 @@ pub const Git = struct {
 
     repo_details: ?RepoDetails = null,
 
-    fn parseUrl(allocator: Allocator, url: string) !RepoDetails {
-        var splits = std.mem.splitSequence(u8, url, "/");
+    fn parseUrl(allocator: Allocator, package: string, default_branch: string) !RepoDetails {
+        var splits = std.mem.splitSequence(u8, package, "/");
 
-        var author: string = undefined;
-        var repo: string = undefined;
+        const author = splits.next() orelse return error.AuthorNotFound;
+        const repo = splits.next() orelse return error.RepoNotFound;
+        const formatted_url = try std.fmt.allocPrint(allocator, "https://api.github.com/repos/{s}/commits/{s}", .{ package, default_branch });
+        const tarball_url = try std.fmt.allocPrint(allocator, "https://api.github.com/repos/{s}/tarball/{s}", .{ package, default_branch });
 
-        while (splits.next()) |split| {
-            if (std.mem.eql(u8, split, "github.com")) {
-                author = splits.next().?;
-                repo = splits.next().?;
-            }
-        }
-
-        // TODO: Make branch dynamic
-        const formatted_url = try std.fmt.allocPrint(allocator, "https://api.github.com/repos/{s}/{s}/commits/{s}", .{ author, repo, "master" });
-        const tarball_url = try std.fmt.allocPrint(allocator, "https://api.github.com/repos/{s}/{s}/tarball/{s}", .{ author, repo, "master" });
-
-        return .{ .author = author, .repo = repo, .branch = "master", .repo_url = formatted_url, .tarball_url = tarball_url };
+        return .{ .author = author, .repo = repo, .branch = default_branch, .repo_url = formatted_url, .tarball_url = tarball_url };
     }
 
     // TODO allow just author/repo (ex: aw1875/zarn) rather than entire url
-    pub fn getGitDetails(allocator: Allocator, url: string) !Git {
+    pub fn getGitDetails(allocator: Allocator, package: string) !Git {
         var client: std.http.Client = .{ .allocator = allocator };
         defer client.deinit();
 
-        const repo_details = try Git.parseUrl(allocator, url);
+        const url = try std.fmt.allocPrint(allocator, "https://api.github.com/repos/{s}", .{package});
+        var uri = std.Uri.parse(url) catch return error.InvalidUrl;
 
-        const uri = std.Uri.parse(repo_details.repo_url) catch unreachable;
         var request = try client.request(.GET, uri, .{ .allocator = allocator }, .{});
         defer request.deinit();
 
@@ -67,7 +58,24 @@ pub const Git = struct {
             return error.RequestNotOk;
         }
 
-        const response = try request.reader().readAllAlloc(allocator, std.math.maxInt(usize));
+        var response = try request.reader().readAllAlloc(allocator, std.math.maxInt(usize));
+        var root = try json.parseFromSliceLeaky(json.Value, allocator, response, .{});
+        const default_branch = root.object.get("default_branch") orelse return error.DefaultBranchNotFound;
+
+        const repo_details = try Git.parseUrl(allocator, package, default_branch.string);
+
+        uri = std.Uri.parse(repo_details.repo_url) catch unreachable;
+        request = try client.request(.GET, uri, .{ .allocator = allocator }, .{});
+
+        try request.start();
+        try request.wait();
+
+        if (request.response.status != .ok) {
+            std.log.err("Failed to get repo details", .{});
+            return error.RequestNotOk;
+        }
+
+        response = try request.reader().readAllAlloc(allocator, std.math.maxInt(usize));
         var git = try json.parseFromSliceLeaky(Git, allocator, response, .{ .ignore_unknown_fields = true });
         git.repo_details = repo_details;
 
