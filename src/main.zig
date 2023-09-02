@@ -5,6 +5,7 @@ const Allocator = std.mem.Allocator;
 const common = @import("common.zig");
 const Git = @import("git.zig").Git;
 const ArgsHandler = @import("cli.zig").ArgsHandler;
+const readLock = @import("utils/lock.zig").readLock;
 
 const string = []const u8;
 
@@ -83,6 +84,8 @@ pub fn removePackage(allocator: Allocator, name: string) !void {
 
 pub fn main() !void {
     try ArgsHandler();
+    try readLock();
+
     // var allocator = std.heap.page_allocator;
     // const process_args = try std.process.argsAlloc(allocator);
     // const args = process_args[1..];

@@ -14,7 +14,7 @@ fn installAll(allocator: Allocator) ArgsError!void {
     std.log.debug("Installing all modules", .{});
 }
 
-fn installModule(allocator: Allocator, module: string) ArgsError!void {
+fn installModule(allocator: Allocator, module: string) !void {
     std.log.debug("Installing module {s}", .{module});
 
     const module_info = try Git.findModule(allocator, module);
@@ -28,13 +28,12 @@ fn installModule(allocator: Allocator, module: string) ArgsError!void {
     Common.getTarballStream(allocator, module_info) catch return ArgsError.DownloadError;
 
     std.log.debug("Adding module {s} to zarn.json", .{module_info.name});
-    var config = Config.fromJSON(allocator) catch return ArgsError.ConfigMissingError;
-    config.addModule(module_info, allocator) catch return ArgsError.ConfigMissingError;
+    var config = try Config.fromJSON(allocator);
+    try config.addModule(module_info, allocator);
 }
 
-pub fn install(allocator: Allocator, module: ?string) ArgsError!void {
-    const config_exists = Common.fileExists("zarn.json") catch return ArgsError.ConfigMissingError;
-    if (!config_exists) {
+pub fn install(allocator: Allocator, module: ?string) !void {
+    if (!try Common.fileExists("zarn.json")) {
         std.log.err("Could not find zarn.json. Please run zarn init first.", .{});
         return;
     }

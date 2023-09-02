@@ -19,7 +19,7 @@ pub const ArgsError = GitError || error{
 };
 
 const Commands = struct {
-    const commands = std.ComptimeStringMap(*const fn (Allocator, ?string) ArgsError!void, .{
+    const commands = std.ComptimeStringMap(*const fn (Allocator, ?string) anyerror!void, .{
         .{ "add", @import("commands/install.zig").install },
         .{ "init", init },
         .{ "help", help },
